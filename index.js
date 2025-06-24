@@ -40,8 +40,8 @@ app.post('/api/perguntas', async (req, res) => {
         await sql.connect(dbConfig);
         await sql.query(`
             INSERT INTO Perguntas_Checklist (Texto_Pergunta, Ativa)
-            VALUES ('${Texto_Pergunta}', 1)
-        `);
+            VALUES (@texto, 1)
+        `, { texto: Texto_Pergunta });
         res.send('Pergunta criada com sucesso.');
     } catch (err) {
         console.error("ERRO AO CRIAR PERGUNTA:", err);
@@ -53,7 +53,7 @@ app.delete('/api/perguntas/:id', async (req, res) => {
     try {
         const id = req.params.id;
         await sql.connect(dbConfig);
-        await sql.query(`DELETE FROM Perguntas_Checklist WHERE Id = ${id}`);
+        await sql.query(`DELETE FROM Perguntas_Checklist WHERE Id = @id`, { id });
         res.send('Pergunta excluída com sucesso.');
     } catch (err) {
         console.error("ERRO AO EXCLUIR PERGUNTA:", err);
@@ -68,9 +68,9 @@ app.put('/api/perguntas/:id', async (req, res) => {
         await sql.connect(dbConfig);
         await sql.query(`
             UPDATE Perguntas_Checklist
-            SET Texto_Pergunta = '${Texto_Pergunta}'
-            WHERE Id = ${id}
-        `);
+            SET Texto_Pergunta = @texto
+            WHERE Id = @id
+        `, { texto: Texto_Pergunta, id });
         res.send('Pergunta atualizada com sucesso.');
     } catch (err) {
         console.error("ERRO AO EDITAR PERGUNTA:", err);
@@ -87,8 +87,13 @@ app.post('/api/respostas', async (req, res) => {
         const jsonString = JSON.stringify(Json_Respostas);
         await sql.query(`
             INSERT INTO Respostas_Usuarios (NomeResponsavel, Prefixo, Observacoes, Json_Respostas, DataHora)
-            VALUES ('${NomeResponsavel}', '${Prefixo}', '${Observacoes}', '${jsonString}', GETDATE())
-        `);
+            VALUES (@nome, @prefixo, @obs, @json, GETDATE())
+        `, {
+            nome: NomeResponsavel,
+            prefixo: Prefixo,
+            obs: Observacoes,
+            json: jsonString
+        });
         res.send('Checklist salvo com sucesso.');
     } catch (err) {
         console.error("ERRO AO SALVAR RESPOSTAS:", err);
@@ -135,8 +140,8 @@ app.post('/api/importar-excel', excelUpload.single('file'), async (req, res) => 
             const jsonString = JSON.stringify(row);
             await sql.query(`
                 INSERT INTO Checklists_Modelos (Json_Modelo, DataCadastro)
-                VALUES ('${jsonString}', GETDATE())
-            `);
+                VALUES (@json, GETDATE())
+            `, { json: jsonString });
         }
 
         res.send(`Importado com sucesso. Total de linhas: ${data.length}`);
