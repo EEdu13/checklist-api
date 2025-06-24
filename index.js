@@ -1,13 +1,18 @@
 const express = require('express');
 const sql = require('mssql');
 const cors = require('cors');
+const multer = require('multer');
+const { BlobServiceClient } = require('@azure/storage-blob');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Configurações globais
 app.use(cors());
 app.use(express.json());
 
+// Configuração do SQL Server
 const dbConfig = {
     user: 'gestaoti2',
     password: 'NovaSenha123!',
@@ -16,7 +21,8 @@ const dbConfig = {
     options: { encrypt: true }
 };
 
-// GET - Listar perguntas
+// ------------------------------------
+// ROTA: GET - Listar Perguntas
 app.get('/api/perguntas', async (req, res) => {
     try {
         await sql.connect(dbConfig);
@@ -28,7 +34,8 @@ app.get('/api/perguntas', async (req, res) => {
     }
 });
 
-// POST - Criar nova pergunta
+// ------------------------------------
+// ROTA: POST - Criar nova pergunta
 app.post('/api/perguntas', async (req, res) => {
     try {
         const { Texto_Pergunta } = req.body;
@@ -44,7 +51,8 @@ app.post('/api/perguntas', async (req, res) => {
     }
 });
 
-// DELETE - Excluir pergunta
+// ------------------------------------
+// ROTA: DELETE - Excluir pergunta
 app.delete('/api/perguntas/:id', async (req, res) => {
     try {
         const id = req.params.id;
@@ -57,7 +65,8 @@ app.delete('/api/perguntas/:id', async (req, res) => {
     }
 });
 
-// PUT - Editar pergunta
+// ------------------------------------
+// ROTA: PUT - Editar pergunta
 app.put('/api/perguntas/:id', async (req, res) => {
     try {
         const id = req.params.id;
@@ -75,7 +84,8 @@ app.put('/api/perguntas/:id', async (req, res) => {
     }
 });
 
-// POST - Salvar respostas do checklist (mantendo sua rota antiga)
+// ------------------------------------
+// ROTA: POST - Salvar respostas
 app.post('/api/respostas', async (req, res) => {
     const { NomeResponsavel, Prefixo, Observacoes, Json_Respostas } = req.body;
 
@@ -86,13 +96,38 @@ app.post('/api/respostas', async (req, res) => {
             INSERT INTO Respostas_Usuarios (NomeResponsavel, Prefixo, Observacoes, Json_Respostas, DataHora)
             VALUES ('${NomeResponsavel}', '${Prefixo}', '${Observacoes}', '${jsonString}', GETDATE())
         `);
-        res.send('Checklist salvo com sucesso');
+        res.send('Checklist salvo com sucesso.');
     } catch (err) {
         console.error("ERRO AO SALVAR RESPOSTAS:", err);
         res.status(500).send('Erro ao salvar respostas');
     }
 });
 
+// ------------------------------------
+// Upload de Foto para o Azure Blob Storage
+const upload = multer({ storage: multer.memoryStorage() });
+const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const containerName = 'fotos-checklist';
+
+app.post('/api/upload-foto', upload.single('file'), async (req, res) => {
+    try {
+        const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
+        const containerClient = blobServiceClient.getContainerClient(containerName);
+
+        const blobName = `${Date.now()}_${req.file.originalname}`;
+        const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+        await blockBlobClient.uploadData(req.file.buffer);
+
+        res.json({ url: blockBlobClient.url });
+    } catch (err) {
+        console.error('Erro ao fazer upload no Azure Blob:', err);
+        res.status(500).send('Erro ao fazer upload da imagem');
+    }
+});
+
+// ------------------------------------
+// Start API
 app.listen(port, '0.0.0.0', () => {
     console.log(`API rodando na porta ${port}`);
 });
