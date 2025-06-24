@@ -119,7 +119,7 @@ app.post('/api/upload-foto', upload.single('file'), async (req, res) => {
     }
 });
 
-// --------------------- IMPORTAÇÃO DE EXCEL COM MULTER + XLSX ---------------------
+// --------------------- IMPORTAÇÃO DE EXCEL ---------------------
 
 const excelUpload = multer({ storage: multer.memoryStorage() });
 
@@ -143,6 +143,31 @@ app.post('/api/importar-excel', excelUpload.single('file'), async (req, res) => 
     } catch (err) {
         console.error('Erro ao importar Excel:', err);
         res.status(500).send('Erro ao importar Excel');
+    }
+});
+
+// --------------------- LISTAR MODELOS (GALERIA CHECKLISTS) ---------------------
+
+app.get('/api/modelos', async (req, res) => {
+    try {
+        await sql.connect(dbConfig);
+        const result = await sql.query(`
+            SELECT Id, Json_Modelo, DataCadastro 
+            FROM Checklists_Modelos
+            ORDER BY DataCadastro DESC
+        `);
+
+        const modelos = result.recordset.map(row => ({
+            Id: row.Id,
+            DataCadastro: row.DataCadastro,
+            Dados: JSON.parse(row.Json_Modelo)
+        }));
+
+        res.json(modelos);
+
+    } catch (err) {
+        console.error('Erro ao listar modelos:', err);
+        res.status(500).send('Erro ao buscar modelos de checklist');
     }
 });
 
