@@ -2,13 +2,13 @@ const express = require('express');
 const sql = require('mssql');
 const cors = require('cors');
 const multer = require('multer');
+const xlsx = require('xlsx');
 const { BlobServiceClient } = require('@azure/storage-blob');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Configurações globais
 app.use(cors());
 app.use(express.json());
 
@@ -21,8 +21,8 @@ const dbConfig = {
     options: { encrypt: true }
 };
 
-// ------------------------------------
-// ROTA: GET - Listar Perguntas
+// --------------------- PERGUNTAS CHECKLIST ---------------------
+
 app.get('/api/perguntas', async (req, res) => {
     try {
         await sql.connect(dbConfig);
@@ -34,8 +34,6 @@ app.get('/api/perguntas', async (req, res) => {
     }
 });
 
-// ------------------------------------
-// ROTA: POST - Criar nova pergunta
 app.post('/api/perguntas', async (req, res) => {
     try {
         const { Texto_Pergunta } = req.body;
@@ -51,8 +49,6 @@ app.post('/api/perguntas', async (req, res) => {
     }
 });
 
-// ------------------------------------
-// ROTA: DELETE - Excluir pergunta
 app.delete('/api/perguntas/:id', async (req, res) => {
     try {
         const id = req.params.id;
@@ -65,8 +61,6 @@ app.delete('/api/perguntas/:id', async (req, res) => {
     }
 });
 
-// ------------------------------------
-// ROTA: PUT - Editar pergunta
 app.put('/api/perguntas/:id', async (req, res) => {
     try {
         const id = req.params.id;
@@ -84,11 +78,10 @@ app.put('/api/perguntas/:id', async (req, res) => {
     }
 });
 
-// ------------------------------------
-// ROTA: POST - Salvar respostas
+// --------------------- RESPOSTAS CHECKLIST ---------------------
+
 app.post('/api/respostas', async (req, res) => {
     const { NomeResponsavel, Prefixo, Observacoes, Json_Respostas } = req.body;
-
     try {
         await sql.connect(dbConfig);
         const jsonString = JSON.stringify(Json_Respostas);
@@ -103,8 +96,8 @@ app.post('/api/respostas', async (req, res) => {
     }
 });
 
-// ------------------------------------
-// Upload de Foto para o Azure Blob Storage
+// --------------------- UPLOAD FOTO NO AZURE BLOB ---------------------
+
 const upload = multer({ storage: multer.memoryStorage() });
 const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
 const containerName = 'fotos-checklist';
@@ -118,16 +111,43 @@ app.post('/api/upload-foto', upload.single('file'), async (req, res) => {
         const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
         await blockBlobClient.uploadData(req.file.buffer);
-
         res.json({ url: blockBlobClient.url });
+
     } catch (err) {
         console.error('Erro ao fazer upload no Azure Blob:', err);
         res.status(500).send('Erro ao fazer upload da imagem');
     }
 });
 
-// ------------------------------------
-// Start API
+// --------------------- IMPORTAÇÃO DE EXCEL COM MULTER + XLSX ---------------------
+
+const excelUpload = multer({ storage: multer.memoryStorage() });
+
+app.post('/api/importar-excel', excelUpload.single('file'), async (req, res) => {
+    try {
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        await sql.connect(dbConfig);
+
+        for (const row of data) {
+            const jsonString = JSON.stringify(row);
+            await sql.query(`
+                INSERT INTO Checklists_Modelos (Json_Modelo, DataCadastro)
+                VALUES ('${jsonString}', GETDATE())
+            `);
+        }
+
+        res.send(`Importado com sucesso. Total de linhas: ${data.length}`);
+    } catch (err) {
+        console.error('Erro ao importar Excel:', err);
+        res.status(500).send('Erro ao importar Excel');
+    }
+});
+
+// --------------------- START API ---------------------
+
 app.listen(port, '0.0.0.0', () => {
     console.log(`API rodando na porta ${port}`);
 });
